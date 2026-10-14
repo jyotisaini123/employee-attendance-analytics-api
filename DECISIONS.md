@@ -1,12 +1,16 @@
-# DECISIONS.md  (about 150-200 words in total - plain language, your own words)
+# DECISIONS.md
 
+### 1. Indexes
+I added a unique index on `emp_code` to avoid duplicate employees. I also added a unique index on `emp_code` and `date` to prevent multiple attendance records for the same employee on one day. Other indexes help find records faster.
 
-1. **Indexes:** I created a unique index on `employees.emp_code` to prevent duplicate employees and a unique compound index on `attendance_logs(emp_code, date)` to prevent duplicate attendance records. Other indexes support attendance filtering, sorting, and punch-out lookups. I rejected an index on `late_minutes` because queries filter by date first.
+### 2. Punch-in Race
+If two punch-in requests come at the same time, both may try to save a record. The unique index allows only one record to be saved. The other request gets a duplicate key error, and the API returns a 409 Conflict response.
 
-2. **Punch-in race:** If two identical punch-in requests arrive simultaneously, both may pass the employee check. The unique index allows only one insert. The second insert raises `DuplicateKeyError`, and the API returns HTTP 409 Conflict.
+### 3. Ties
+I used MongoDB's `$rank` function for the late leaderboard. Employees with the same total late minutes get the same rank. If multiple employees share the cutoff rank, all of them are included in the result.
 
-3. **Ties:** The leaderboard uses `$rank`, so employees with equal late minutes receive the same rank. If a tie occurs at the limit, all employees with that rank are returned, even if the result exceeds the limit.
+### 4. Headcount
+I start the department summary with the employees collection and use `$lookup` to find attendance records. This also includes employees who joined by the end of the month but have no attendance records.
 
-4. **Headcount:** The department summary starts from the employees collection and uses `$lookup` to find attendance logs. This keeps employees with no attendance records included in the department headcount.
-
-5. **Scaling:** If the system had 100 times more data, I would maintain a daily summary collection updated when attendance changes. This would reduce repeated calculations over all attendance records.
+### 5. Scaling
+If the data grows 100 times, I would consider creating a daily summary collection. I would update it whenever attendance changes. This could reduce repeated calculations and make analytics faster. Before making changes, I would also check which queries are taking more time.
